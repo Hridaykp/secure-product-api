@@ -3,13 +3,36 @@ import requests
 from pydantic import BaseModel
 from pymongo import MongoClient
 from bson import ObjectId
-mongo_uri = "mongodb://localhost:27017/"
+from bson.errors import InvalidId
+
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from fastapi import Depends
+from fastapi.security import OAuth2PasswordBearer
+from datetime import datetime, timedelta
+
+mongo_uri = "mongodb://localhost:27017"
 
 app = FastAPI()
 
 client = MongoClient(mongo_uri)
 db = client["fastapi_db"]             # here we give as DB name
-products_collection = db["products"]  # witin DB name, it is collection name
+products_collection = db["products"]  # within DB name, it is collection name
+users_collection = db["users"]       # for user collection
+
+
+SECRET_KEY = "your-super-secret-key"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto"
+)
+
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="login"
+)
 
 
 # for serialization in dictionary
@@ -20,6 +43,45 @@ def product_serializer(product) -> dict:
         "name" : product["name"],
         "price": product["price"]
     }
+
+class UserRegister(BaseModel):
+    username: str
+    password: str
+
+class UserLogin(BaseModel):
+    username: str 
+    password: str
+
+
+def hash_password(password: str):
+    print(password, len(password))
+    return pwd_context.hash(password)
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(
+        plain_password,
+        hashed_password
+    )
+
+# Register endpoint
+@app.post("/register")
+def register(user: UserRegister):
+    existing_user = users_collection.find_one(
+        {"username": user.username}
+    )   
+
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="Username already exists"
+        )
+
+    users_collection.insert_one({
+        "username": user.username,
+        "password": hash_password(user.password)
+    })
+
+    return {"message": "User registered successfully !!"} 
 
 
 #Home URL
@@ -120,6 +182,3 @@ def delete_Product(prod_id: str):
         return{"message":f"prod_id {prod_id}not found"}
     
 
-
-dbs = client.list_database_names()
-print(dbs)
