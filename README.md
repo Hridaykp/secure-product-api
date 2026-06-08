@@ -102,34 +102,6 @@ The API will be available at `http://localhost:8000`
 }
 ```
 
-## Security Notes
-
-- ⚠️ **Update SECRET_KEY**: Replace `"your-super-secret-key"` in `api.py` with a strong, unique secret key
-- Uses bcrypt for secure password hashing
-- JWT tokens expire after 30 minutes (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`)
-
-## Example Usage
-
-```bash
-# Register a new user
-curl -X POST "http://localhost:8000/register" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "john", "password": "secret123"}'
-
-# Add a product
-curl -X POST "http://localhost:8000/products" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Laptop", "price": 999.99}'
-
-# Get all products
-curl -X GET "http://localhost:8000/products"
-
-# Get product by ID
-curl -X GET "http://localhost:8000/products/id/507f1f77bcf86cd799439011"
-
-# Filter by price
-curl -X GET "http://localhost:8000/products/price/500"
-```
 
 ## Contributing
 
