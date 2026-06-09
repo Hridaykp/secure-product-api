@@ -1,15 +1,17 @@
 # FastAPI Product Management API
 
-A FastAPI-based REST API for managing products and users with authentication, built with MongoDB for data persistence.
+A FastAPI-based REST API for managing products and users with JWT-based authentication, built with MongoDB for data persistence.
 
 ## Features
 
 - **User Authentication**: User registration and login with JWT token-based authentication
+- **Protected Endpoints**: Access user profile with valid JWT token
 - **Product Management**: Create, read, update, and delete products
-- **Price Filtering**: Filter products by price ranges
+- **Price Filtering**: Filter products by price ranges from external API
 - **Data Validation**: Pydantic-based request validation
 - **Secure Password Storage**: bcrypt-based password hashing
 - **MongoDB Integration**: Persistent data storage with MongoDB
+- **OAuth2 Security**: OAuth2PasswordBearer implementation for token-based authentication
 
 ## Tech Stack
 
@@ -18,6 +20,7 @@ A FastAPI-based REST API for managing products and users with authentication, bu
 - **Authentication**: JWT (JSON Web Tokens) with OAuth2
 - **Password Security**: bcrypt via passlib
 - **API Documentation**: Automatic OpenAPI/Swagger UI
+- **External API Integration**: requests library for price filtering
 
 ## Prerequisites
 
@@ -61,26 +64,54 @@ The API will be available at `http://localhost:8000`
 
 ## API Endpoints
 
-### Authentication
+### Authentication Endpoints
 - `POST /register` - Register a new user
   - **Body**: `{ "username": "string", "password": "string" }`
   - **Response**: User registration success message
+  - **Error**: Returns 400 if username already exists
 
-- `POST /login` - Login user and get JWT token
-  - **Body**: `{ "username": "string", "password": "string" }`
-  - **Response**: JWT access token
+- `POST /login` - Login user and get JWT access token
+  - **Body**: OAuth2 form data with username and password
+  - **Response**: `{ "access_token": "string", "token_type": "bearer" }`
+  - **Error**: Returns 400 for invalid credentials
+  - **Token Expiration**: 30 minutes (configurable via ACCESS_TOKEN_EXPIRE_MINUTES)
 
-### Products
+- `GET /profile` - Get current user profile (requires valid JWT token)
+  - **Headers**: `Authorization: Bearer <token>`
+  - **Response**: `{ "id": "string", "username": "string" }`
+  - **Error**: Returns 401 if token is invalid or missing
+
+### General Endpoints
 - `GET /` - Home page
 - `GET /about` - About page
-- `GET /products` - Fetch all products
+
+### Product Endpoints
+- `GET /products` - Fetch all products from MongoDB
+  - **Response**: List of all products with serialized data
+  
 - `GET /products/id/{id}` - Fetch product by MongoDB ObjectId
+  - **Parameters**: `id` (MongoDB ObjectId as string)
+  - **Response**: Product details if found
+  - **Error**: Returns 400 for invalid ObjectId format
+  
 - `GET /products/price/{price}` - Filter products by price range
-- `POST /products` - Add new product
+  - **Parameters**: `price` (integer)
+  - **Response**: Products with price in range [price, price+1) from external API
+  - **Note**: Uses fakestoreapi.com for data
+
+- `POST /products` - Add new product to MongoDB
   - **Body**: `{ "name": "string", "price": float }`
-- `PUT /products/{prod_id}` - Update product
+  - **Response**: `{ "message": "string", "id": "string", "product": {...} }`
+
+- `PUT /products/{prod_id}` - Update existing product
+  - **Parameters**: `prod_id` (MongoDB ObjectId as string)
   - **Body**: `{ "name": "string", "price": float }`
-- `DELETE /products/{prod_id}` - Delete product
+  - **Response**: Success message
+  - **Error**: Returns 404 if product not found
+
+- `DELETE /products/{prod_id}` - Delete product by ID
+  - **Parameters**: `prod_id` (MongoDB ObjectId as string)
+  - **Response**: Success or "not found" message
 
 ## Database Schema
 
@@ -89,7 +120,7 @@ The API will be available at `http://localhost:8000`
 {
   "_id": "ObjectId",
   "username": "string",
-  "password": "string (hashed)"
+  "password": "string (bcrypt hashed)"
 }
 ```
 
@@ -102,6 +133,24 @@ The API will be available at `http://localhost:8000`
 }
 ```
 
+## Authentication Flow
+
+1. **User Registration**: POST to `/register` with username and password
+2. **Password Hashing**: Passwords are hashed using bcrypt before storage
+3. **User Login**: POST to `/login` to receive JWT access token (30 minutes expiration)
+4. **Token Usage**: Include token in Authorization header as `Bearer <token>`
+5. **Token Validation**: Tokens are decoded and verified for protected endpoints
+
+## Configuration
+
+The following configurations can be modified in `api.py`:
+
+```python
+SECRET_KEY = "your-super-secret-key"  # Change this to a secure random key
+ALGORITHM = "HS256"                    # JWT algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES = 30       # Token expiration time
+mongo_uri = "mongodb://localhost:27017"  # MongoDB connection URI
+```
 
 ## Contributing
 
