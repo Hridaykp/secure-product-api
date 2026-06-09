@@ -8,8 +8,8 @@ from bson.errors import InvalidId
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends
-from fastapi.security import OAuth2PasswordBearer
-from datetime import datetime, timedelta
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from datetime import datetime, timedelta, timezone
 
 mongo_uri = "mongodb://localhost:27017"
 
@@ -24,6 +24,7 @@ users_collection = db["users"]       # for user collection
 SECRET_KEY = "your-super-secret-key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+# refresh_token_expires_minutes = 60 * 24 * 7 # 7 days
 
 pwd_context = CryptContext(
     schemes=["bcrypt"],
@@ -54,7 +55,7 @@ class UserLogin(BaseModel):
 
 
 def hash_password(password: str):
-    print(password, len(password))
+    # print(password, len(password))
     return pwd_context.hash(password)
 
 def verify_password(plain_password, hashed_password):
@@ -62,6 +63,49 @@ def verify_password(plain_password, hashed_password):
         plain_password,
         hashed_password
     )
+
+
+# for creating access token with expiration time
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes = 15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm = ALGORITHM)
+    return encoded_jwt 
+
+
+# To get the current user based on the token provided in the request header
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    print("Recieved token", token)
+    credentials_exception = HTTPException(
+        status_code = 401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+
+        if username is None:
+            raise credentials_exception
+        
+    except JWTError:
+        raise credentials_exception
+    
+    user = users_collection.find_one({"username": username})
+
+    if not user:
+        raise credentials_exception
+    
+    return{
+            "id": str(user["_id"]),
+            "username": user["username"]
+        }
+
+
 
 # Register endpoint
 @app.post("/register")
@@ -79,10 +123,43 @@ def register(user: UserRegister):
     users_collection.insert_one({
         "username": user.username,
         "password": hash_password(user.password)
-    })
+    }) 
 
     return {"message": "User registered successfully !!"} 
 
+
+# Login endpoint
+@app.post("/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    db_user = users_collection.find_one(
+        {"username": form_data.username}
+    )
+
+    if not db_user:
+        raise HTTPException(
+            status_code = 400,
+            detail = "Invalid username or password !!"
+        )
+
+    if not verify_password(form_data.password, db_user["password"]):
+        raise HTTPException(
+            status_code = 400,
+            detail = "Invalid username or password !!"
+        )
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": form_data.username},
+        expires_delta = access_token_expires
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+# Protected endpoint to get user profile, accessible only with valid token
+@app.get("/profile")
+def get_profile(current_user: dict = Depends(get_current_user)):
+    return current_user
 
 #Home URL
 @app.get("/")
@@ -102,9 +179,14 @@ def about_page():
 #Fetching one product by its ID
 @app.get("/products/id/{id}")
 def get_productbyID(id: str):
-    product = products_collection.find_one(
-        {"_id":ObjectId(id)}
-    )
+    try:
+        product = products_collection.find_one(
+            {"_id":ObjectId(id)}
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid product ID")
+
     if product:
         return{
             "product":product_serializer(product),
