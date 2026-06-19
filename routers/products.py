@@ -9,6 +9,7 @@ from schemas.product import Product, product_serializer
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
+
 @router.get("")
 def get_Products():
     products = list(products_collection.find())
@@ -16,6 +17,7 @@ def get_Products():
         "message": "products are here",
         "products": [product_serializer(p) for p in products]   
     }   
+
 
 # Get product by ID
 @router.get("/id/{id}")
@@ -33,6 +35,7 @@ def get_productbyID(id: str):
     raise HTTPException(status_code=404, detail="Product ID not found")
 
 
+
 # Get products by price range
 @router.get("/price/{price}")
 def get_Product(price: int):
@@ -45,7 +48,8 @@ def get_Product(price: int):
     return filtered_price
 
 
-# Get products 
+
+# Add a new product
 @router.post("")
 def add_Product(product: Product):
     result = products_collection.insert_one(product.model_dump())
@@ -54,6 +58,7 @@ def add_Product(product: Product):
         "id": str(result.inserted_id),
         "product": product
     }
+
 
 
 # Update product by ID

@@ -38,6 +38,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     }
 
 
+
 # User registration endpoint
 @router.post("/register")
 def register(user: UserRegister):
@@ -50,6 +51,7 @@ def register(user: UserRegister):
         "password": hash_password(user.password)
     }) 
     return {"message": "User registered successfully !!"} 
+
 
 
 # User login endpoint
