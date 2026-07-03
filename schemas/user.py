@@ -4,6 +4,7 @@ from pydantic import BaseModel
 class UserRegister(BaseModel):
     username: str
     password: str
+    role: str       # Role can be "admin" or "user"
 
 class UserLogin(BaseModel):
     username: str 

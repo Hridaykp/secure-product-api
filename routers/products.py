@@ -61,7 +61,7 @@ def add_Product(product: Product):
 
 
 
-# Update product by ID
+# Update product by ID 
 @router.put("/{prod_id}") 
 def update_Products(prod_id: str, updated_product: Product):
     try:
