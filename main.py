@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, products
+from routers import auth, products, admin
 
 app = FastAPI(title="E-Comm(FastAPI)")
 
@@ -16,7 +16,7 @@ app.add_middleware(
 # Include routers for authentication and product management
 app.include_router(auth.router)
 app.include_router(products.router)
-
+app.include_router(admin.router)  # Include the admin router
 # General endpoints 
 @app.get("/", tags=["General"])
 def home_Page():

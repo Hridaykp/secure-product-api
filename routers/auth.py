@@ -53,13 +53,6 @@ def role_required(allowed_roles: list):
 
 
 
-@router.get("/admin-only")
-def admin_only_endpoint(current_user: dict = Depends(role_required(["admin"]))):
-   return {
-       "message": "Welcome, admin! You have access to this endpoint.",
-       "user": current_user
-   }
-
 
 # User registration endpoint
 @router.post("/register")

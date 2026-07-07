@@ -6,7 +6,7 @@ from database.connection import users_collection
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
-# Admin-only endpoint
+# Endpoint to promote a user to admin role
 @router.post("/make-admin/{username}")
 def make_admin(username: str, current_user: dict = Depends(role_required(["admin"]))):
     result = users_collection.update_one(
@@ -20,10 +20,20 @@ def make_admin(username: str, current_user: dict = Depends(role_required(["admin
     return {"message": f"{username} is now admin"}
 
 
-# Admin dashboard endpoint
+# Endpoint to get admin dashboard statistics
 @router.get("/dashboard")
 def admin_dashboard(current_user: dict = Depends(role_required(["admin"]))):
+    total_users = users_collection.count_documents({})
+    total_admins = users_collection.count_documents({"role": "admin"})
+
     return {
-        "message": "Welcome to the admin dashboard !",
-        "user": current_user
+        "message": "Welcome to the admin dashboard !!",
+        "current_admin": current_user["username"],
+        
+        "statistics": {
+            "total_users": total_users,
+            "total_admins": total_admins
+        }
     }
+
+
