@@ -29,7 +29,6 @@ def admin_dashboard(current_user: dict = Depends(role_required(["admin"]))):
     return {
         "message": "Welcome to the admin dashboard !!",
         "current_admin": current_user["username"],
-        
         "statistics": {
             "total_users": total_users,
             "total_admins": total_admins

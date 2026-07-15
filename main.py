@@ -13,10 +13,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers for authentication and product management
+# Include routers for authentication, product management and admin
 app.include_router(auth.router)
 app.include_router(products.router)
-app.include_router(admin.router)  # Include the admin router
+app.include_router(admin.router) 
+
+
 # General endpoints 
 @app.get("/", tags=["General"])
 def home_Page():

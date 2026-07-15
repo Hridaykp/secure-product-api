@@ -3,9 +3,9 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from database.connection import users_collection
-from schemas.user import UserRegister
-from core.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
-from core.security import hash_password, verify_password, create_access_token
+from schemas.user import UserRegister, RefreshTokenRequest
+from core.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
+from core.security import hash_password, verify_password, create_access_token, create_refresh_token
 # from fastapi.responses import JSONResponse
 
 
@@ -25,7 +25,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
 
-        if not username:
+        if not username or payload.get("type") != "access":
             raise credentials_exception
         
     except JWTError:
@@ -50,7 +50,6 @@ def role_required(allowed_roles: list):
             raise HTTPException(status_code=403, detail="Access denied")
         return current_user
     return wrapper
-
 
 
 
@@ -86,9 +85,57 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         expires_delta=access_token_expires
     )
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    refresh_token = create_refresh_token(
+        data={"sub": form_data.username },
+        expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    )
 
-    
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer"
+    } 
+
+
+
+# Refresh token endpoint
+@router.post("/refresh-token")
+def refresh_token(request: RefreshTokenRequest):
+
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Invalid refresh token"
+    )
+
+    try:
+        payload = jwt.decode(request.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        token_type = payload.get("type")
+
+        if not username or token_type != "refresh":
+            raise credentials_exception
+
+    except JWTError:
+        raise credentials_exception
+
+    db_user = users_collection.find_one({"username": username})
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    new_access_token = create_access_token(
+        data={"sub": username,
+              "role": db_user.get("role", "user")
+        },
+        expires_delta=access_token_expires
+    )
+
+    return {
+        "access_token": new_access_token,
+        "token_type": "bearer"
+    }
 
 
 
@@ -96,3 +143,5 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @router.get("/profile")
 def get_profile(current_user: dict = Depends(role_required(["user", "admin"]))):   # Both "user" and "admin" can access this endpoint
     return current_user 
+
+
