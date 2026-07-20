@@ -1,8 +1,8 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from database.connection import users_collection
+from database.connection import users_collection, tokens_collection
 from schemas.user import UserRegister, RefreshTokenRequest
 from core.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
 from core.security import hash_password, verify_password, create_access_token, create_refresh_token
@@ -12,6 +12,18 @@ from core.security import hash_password, verify_password, create_access_token, c
 router = APIRouter(tags=["Authentication"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+
+def store_token(username: str, token: str, token_type: str, expires_delta: timedelta):
+    now = datetime.now(timezone.utc)
+    tokens_collection.insert_one({
+        "username": username,
+        "token": token,
+        "token_type": token_type,
+        "revoked": False,
+        "created_at": now,
+        "expires_at": now + expires_delta,
+    })
 
 
 # Dependency to get the current user from the token
@@ -31,6 +43,16 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise credentials_exception
     
+    stored_token = tokens_collection.find_one({
+        "username": username,
+        "token": token,
+        "token_type": "access",
+        "revoked": False,
+    })
+
+    if not stored_token:
+        raise credentials_exception
+
     user = users_collection.find_one({"username": username})
 
     if not user:
@@ -79,6 +101,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=400, detail="Invalid username or password !!")
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    refresh_token_expires = timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+
     access_token = create_access_token(
         data={"sub": form_data.username,
         "role": db_user.get("role", "user")},
@@ -87,8 +111,11 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
     refresh_token = create_refresh_token(
         data={"sub": form_data.username },
-        expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        expires_delta=refresh_token_expires
     )
+    
+    store_token(form_data.username, access_token, "access", access_token_expires)
+    store_token(form_data.username, refresh_token, "refresh", refresh_token_expires)
 
     return {
         "access_token": access_token,
@@ -118,6 +145,16 @@ def refresh_token(request: RefreshTokenRequest):
     except JWTError:
         raise credentials_exception
 
+    stored_refresh_token = tokens_collection.find_one({
+        "username": username,
+        "token": request.refresh_token,
+        "token_type": "refresh",
+        "revoked": False,
+    })
+
+    if not stored_refresh_token:
+        raise credentials_exception
+
     db_user = users_collection.find_one({"username": username})
 
     if not db_user:
@@ -131,6 +168,12 @@ def refresh_token(request: RefreshTokenRequest):
         },
         expires_delta=access_token_expires
     )
+
+    tokens_collection.update_many(
+        {"username": username, "token_type": "access", "revoked": False},
+        {"$set": {"revoked": True}}
+    )
+    store_token(username, new_access_token, "access", access_token_expires)
 
     return {
         "access_token": new_access_token,

@@ -13,3 +13,11 @@ class UserLogin(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+class Tokens(BaseModel):
+    username: str
+    token: str
+    token_type: str
+    revoked: bool = False
+    created_at: str | None = None
+    expires_at: str | None = None
