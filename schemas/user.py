@@ -21,3 +21,7 @@ class Tokens(BaseModel):
     revoked: bool = False
     created_at: str | None = None
     expires_at: str | None = None
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str

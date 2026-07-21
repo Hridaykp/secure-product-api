@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from database.connection import users_collection, tokens_collection
-from schemas.user import UserRegister, RefreshTokenRequest
+from schemas.user import UserRegister, RefreshTokenRequest, LogoutRequest
 from core.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
 from core.security import hash_password, verify_password, create_access_token, create_refresh_token
 # from fastapi.responses import JSONResponse
@@ -14,6 +14,7 @@ router = APIRouter(tags=["Authentication"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 
+# Function to store tokens in the database
 def store_token(username: str, token: str, token_type: str, expires_delta: timedelta):
     now = datetime.now(timezone.utc)
     tokens_collection.insert_one({
@@ -24,7 +25,7 @@ def store_token(username: str, token: str, token_type: str, expires_delta: timed
         "created_at": now,
         "expires_at": now + expires_delta,
     })
-
+    
 
 # Dependency to get the current user from the token
 def get_current_user(token: str = Depends(oauth2_scheme)):
@@ -48,7 +49,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         "token": token,
         "token_type": "access",
         "revoked": False,
-    })
+    })   
 
     if not stored_token:
         raise credentials_exception
@@ -113,7 +114,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         data={"sub": form_data.username },
         expires_delta=refresh_token_expires
     )
-    
+    # store the tokens in the database
     store_token(form_data.username, access_token, "access", access_token_expires)
     store_token(form_data.username, refresh_token, "refresh", refresh_token_expires)
 
@@ -181,10 +182,38 @@ def refresh_token(request: RefreshTokenRequest):
     }
 
 
+# Logout endpoint
+@router.post("/logout")
+def logout(request: LogoutRequest, current_user: dict = Depends(get_current_user), token: str = Depends(oauth2_scheme)):
+    print("Logout request received for user:", current_user["username"])
+    tokens_collection.update_one({
+            "username": current_user["username"],
+            "token": token,
+            "token_type": "access",
+            "revoked": False,
+        },
+        {
+            "$set" : {"revoked": True}
+        } 
+    ) 
 
+    tokens_collection.update_one({
+            "username": current_user["username"],
+            "token": request.refresh_token,
+            "token_type": "refresh",
+            "revoked": False,
+        },
+        {
+            "$set" : {"revoked": True}
+        } 
+    )
+
+    return {"message": "Logged out successfully !!"}
+ 
 # Endpoint to get user profile
 @router.get("/profile")
 def get_profile(current_user: dict = Depends(role_required(["user", "admin"]))):   # Both "user" and "admin" can access this endpoint
     return current_user 
+
 
 
