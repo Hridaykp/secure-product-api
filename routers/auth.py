@@ -185,8 +185,10 @@ def refresh_token(request: RefreshTokenRequest):
 # Logout endpoint
 @router.post("/logout")
 def logout(request: LogoutRequest, current_user: dict = Depends(get_current_user), token: str = Depends(oauth2_scheme)):
-    print("Logout request received for user:", current_user["username"])
-    tokens_collection.update_one({
+    # print("Logout request received for user:", current_user["username"])
+    print("Access token:", token)
+    print("Refresh token received:", request.refresh_token)
+    result = tokens_collection.update_one({
             "username": current_user["username"],
             "token": token,
             "token_type": "access",
@@ -206,10 +208,12 @@ def logout(request: LogoutRequest, current_user: dict = Depends(get_current_user
         {
             "$set" : {"revoked": True}
         } 
-    )
-
+    )    
+    print("Modified refresh tokens:", result.modified_count)
     return {"message": "Logged out successfully !!"}
  
+
+
 # Endpoint to get user profile
 @router.get("/profile")
 def get_profile(current_user: dict = Depends(role_required(["user", "admin"]))):   # Both "user" and "admin" can access this endpoint

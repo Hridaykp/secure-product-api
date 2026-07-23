@@ -13,4 +13,4 @@ users_collection = db["users"]
 tokens_collection = db["tokens"]
 
 # Check the connection and print the list of collections in the database
-print("Connected to MongoDB successfully !!", db.list_collection_names()) 
+# print("Connected to MongoDB successfully !!", db.list_collection_names()) 
